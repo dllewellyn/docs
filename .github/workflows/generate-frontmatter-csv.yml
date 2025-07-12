@@ -1,0 +1,48 @@
+name: Generate Front Matter CSV
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  generate-csv:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Generate front matter CSV
+      run: npm run process-frontmatter:csv
+      
+    - name: Upload CSV as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontmatter-data-csv
+        path: frontmatter-data.csv
+        retention-days: 30
+        
+    - name: Display CSV info
+      run: |
+        if [ -f frontmatter-data.csv ]; then
+          echo "CSV file generated successfully!"
+          echo "File size: $(du -h frontmatter-data.csv | cut -f1)"
+          echo "Number of lines: $(wc -l < frontmatter-data.csv)"
+          echo "First few lines:"
+          head -5 frontmatter-data.csv
+        else
+          echo "CSV file was not generated"
+          exit 1
+        fi

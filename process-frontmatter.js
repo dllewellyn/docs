@@ -1,0 +1,312 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+const path = require('path');
+const matter = require('gray-matter');
+const { glob } = require('glob');
+
+/**
+ * Script to process markdown files with front matter and export to CSV/JSON
+ * 
+ * This script:
+ * 1. Scans for all .md and .mdx files in the repository
+ * 2. Extracts front matter from each file
+ * 3. Exports data to CSV and/or JSON formats
+ */
+
+class FrontMatterProcessor {
+  constructor() {
+    this.markdownFiles = [];
+    this.frontMatterData = [];
+  }
+
+  /**
+   * Scan directory for markdown files
+   */
+  async scanMarkdownFiles() {
+    try {
+      console.log('Scanning for markdown files...');
+      
+      // Find all .md and .mdx files, excluding node_modules and .git
+      const patterns = [
+        '**/*.md',
+        '**/*.mdx'
+      ];
+      
+      const options = {
+        ignore: [
+          'node_modules/**',
+          '.git/**',
+          'dist/**',
+          'build/**'
+        ]
+      };
+
+      for (const pattern of patterns) {
+        const files = await glob(pattern, options);
+        this.markdownFiles.push(...files);
+      }
+
+      // Remove duplicates
+      this.markdownFiles = [...new Set(this.markdownFiles)];
+      
+      console.log(`✓ Found ${this.markdownFiles.length} markdown files`);
+      return this.markdownFiles;
+    } catch (error) {
+      console.error('✗ Error scanning markdown files:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Parse front matter from markdown files
+   */
+  async parseFrontMatter() {
+    try {
+      console.log('Parsing front matter from markdown files...');
+      this.frontMatterData = [];
+
+      for (const filePath of this.markdownFiles) {
+        try {
+          const fullPath = path.resolve(filePath);
+          const fileContent = fs.readFileSync(fullPath, 'utf8');
+          
+          // Parse front matter using gray-matter
+          const parsed = matter(fileContent);
+          
+          const fileData = {
+            filePath: filePath,
+            fileName: path.basename(filePath),
+            directory: path.dirname(filePath),
+            frontMatter: parsed.data,
+            content: parsed.content,
+            isEmpty: parsed.isEmpty,
+            hasContent: parsed.content.trim().length > 0,
+            lastModified: fs.statSync(fullPath).mtime,
+            size: fs.statSync(fullPath).size
+          };
+
+          this.frontMatterData.push(fileData);
+          
+          console.log(`  ✓ Processed: ${filePath}`);
+          if (Object.keys(parsed.data).length > 0) {
+            console.log(`    Front matter keys: ${Object.keys(parsed.data).join(', ')}`);
+          }
+        } catch (fileError) {
+          console.error(`  ✗ Error processing ${filePath}:`, fileError.message);
+        }
+      }
+
+      console.log(`✓ Parsed front matter from ${this.frontMatterData.length} files`);
+      return this.frontMatterData;
+    } catch (error) {
+      console.error('✗ Error parsing front matter:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate summary of front matter data
+   */
+  generateSummary() {
+    console.log('\n=== FRONT MATTER SUMMARY ===');
+    
+    // Count files with front matter
+    const filesWithFrontMatter = this.frontMatterData.filter(file => 
+      Object.keys(file.frontMatter).length > 0
+    );
+    
+    console.log(`Total files processed: ${this.frontMatterData.length}`);
+    console.log(`Files with front matter: ${filesWithFrontMatter.length}`);
+    console.log(`Files without front matter: ${this.frontMatterData.length - filesWithFrontMatter.length}`);
+
+    // Collect all unique front matter keys
+    const allKeys = new Set();
+    filesWithFrontMatter.forEach(file => {
+      Object.keys(file.frontMatter).forEach(key => allKeys.add(key));
+    });
+
+    console.log(`\nUnique front matter fields found: ${Array.from(allKeys).join(', ')}`);
+
+    // Show files with front matter
+    console.log('\n=== FILES WITH FRONT MATTER ===');
+    filesWithFrontMatter.forEach(file => {
+      console.log(`\n📄 ${file.filePath}`);
+      console.log(`   ${JSON.stringify(file.frontMatter, null, 2).replace(/\n/g, '\n   ')}`);
+    });
+
+    return {
+      totalFiles: this.frontMatterData.length,
+      filesWithFrontMatter: filesWithFrontMatter.length,
+      uniqueFields: Array.from(allKeys),
+      data: this.frontMatterData
+    };
+  }
+
+  /**
+   * Save data to JSON file for backup/review
+   */
+  async saveToFile(outputPath = 'frontmatter-data.json') {
+    try {
+      const data = {
+        timestamp: new Date().toISOString(),
+        summary: this.generateSummary(),
+        files: this.frontMatterData
+      };
+
+      fs.writeFileSync(outputPath, JSON.stringify(data, null, 2));
+      console.log(`✓ Data saved to ${outputPath}`);
+      return true;
+    } catch (error) {
+      console.error('✗ Error saving to file:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Save data to CSV file for easy analysis
+   */
+  async saveToCsv(outputPath = 'frontmatter-data.csv') {
+    try {
+      console.log('Generating CSV export...');
+      
+      // Get all unique front matter keys across all files
+      const allKeys = new Set(['filePath', 'fileName', 'directory', 'lastModified', 'size']);
+      this.frontMatterData.forEach(file => {
+        Object.keys(file.frontMatter).forEach(key => allKeys.add(key));
+      });
+
+      const headers = Array.from(allKeys);
+      
+      // Create CSV content
+      let csvContent = headers.map(header => `"${header}"`).join(',') + '\n';
+      
+      // Add data rows
+      for (const file of this.frontMatterData) {
+        const row = headers.map(header => {
+          let value = '';
+          
+          if (header === 'filePath') {
+            value = file.filePath;
+          } else if (header === 'fileName') {
+            value = file.fileName;
+          } else if (header === 'directory') {
+            value = file.directory;
+          } else if (header === 'lastModified') {
+            value = file.lastModified.toISOString();
+          } else if (header === 'size') {
+            value = file.size.toString();
+          } else if (file.frontMatter[header] !== undefined) {
+            value = file.frontMatter[header];
+            // Handle complex values by converting to string
+            if (typeof value === 'object') {
+              value = JSON.stringify(value);
+            }
+          }
+          
+          // Escape quotes and wrap in quotes for CSV
+          return `"${String(value).replace(/"/g, '""')}"`;
+        }).join(',');
+        
+        csvContent += row + '\n';
+      }
+
+      fs.writeFileSync(outputPath, csvContent);
+      console.log(`✓ CSV data saved to ${outputPath}`);
+      console.log(`✓ CSV contains ${this.frontMatterData.length} rows and ${headers.length} columns`);
+      return true;
+    } catch (error) {
+      console.error('✗ Error saving to CSV:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Main processing function
+   */
+  async process(options = {}) {
+    const {
+      saveToFile = true,
+      saveToCsv = true,
+      outputFile = 'frontmatter-data.json',
+      csvFile = 'frontmatter-data.csv'
+    } = options;
+
+    try {
+      console.log('🚀 Starting front matter processing...\n');
+
+      // Scan for markdown files
+      await this.scanMarkdownFiles();
+
+      // Parse front matter
+      await this.parseFrontMatter();
+
+      // Generate summary
+      const summary = this.generateSummary();
+
+      // Save to JSON file if requested
+      if (saveToFile) {
+        await this.saveToFile(outputFile);
+      }
+
+      // Save to CSV file if requested
+      if (saveToCsv) {
+        await this.saveToCsv(csvFile);
+      }
+
+      console.log('\n✅ Processing completed successfully!');
+      return summary;
+    } catch (error) {
+      console.error('\n❌ Processing failed:', error.message);
+      throw error;
+    }
+  }
+}
+
+// CLI functionality
+async function main() {
+  const args = process.argv.slice(2);
+  
+  const options = {
+    saveToFile: !args.includes('--no-json'),
+    saveToCsv: !args.includes('--no-csv'),
+    outputFile: args.find(arg => arg.startsWith('--output='))?.split('=')[1] || 'frontmatter-data.json',
+    csvFile: args.find(arg => arg.startsWith('--csv='))?.split('=')[1] || 'frontmatter-data.csv'
+  };
+
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log(`
+Usage: node process-frontmatter.js [options]
+
+Options:
+  --no-json           Don't save data to JSON file
+  --no-csv            Don't save data to CSV file
+  --output=FILE       Output JSON file name (default: frontmatter-data.json)
+  --csv=FILE          Output CSV file name (default: frontmatter-data.csv)
+  --help, -h          Show this help message
+
+Examples:
+  node process-frontmatter.js                    # Parse and save to JSON + CSV
+  node process-frontmatter.js --csv=data.csv     # Save CSV to custom file
+  node process-frontmatter.js --no-json          # Only generate CSV, skip JSON
+`);
+    process.exit(0);
+  }
+
+  const processor = new FrontMatterProcessor();
+  
+  try {
+    await processor.process(options);
+  } catch (error) {
+    console.error('Script failed:', error.message);
+    process.exit(1);
+  }
+}
+
+// Export for programmatic usage
+module.exports = FrontMatterProcessor;
+
+// Run as CLI if this file is executed directly
+if (require.main === module) {
+  main();
+}
