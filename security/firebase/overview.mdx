@@ -1,0 +1,163 @@
+---
+title: Firebase Security Overview
+description: "Understanding Firebase security fundamentals and common vulnerabilities"
+---
+
+# Firebase Security Overview
+
+Firebase provides powerful backend services, but with great power comes great responsibility. Understanding Firebase security is crucial for protecting your application and user data.
+
+## What is Firebase Security?
+
+Firebase security is implemented through **Security Rules** - declarative configurations that determine who can access what data and under what conditions. These rules run on Google's servers and are enforced before any data operation.
+
+## Key Security Concepts
+
+### Authentication vs Authorization
+
+- **Authentication**: Verifying who a user is (handled by Firebase Auth)
+- **Authorization**: Determining what a user can do (handled by Security Rules)
+
+### Security Rules Structure
+
+Firebase Security Rules use a domain-specific language that allows you to:
+- Define path-based access controls
+- Validate data structure and content  
+- Implement complex business logic
+- Create reusable functions
+
+## Common Firebase Security Vulnerabilities
+
+<CardGroup cols={1}>
+  <Card
+    title="FBR-ACCESS-001: Universal Public Access"
+    icon="shield-exclamation" 
+    href="/security/firebase/fbr-access-001"
+    color="#red"
+  >
+    Critical: Firestore rules that allow unrestricted read/write access to anyone
+  </Card>
+</CardGroup>
+
+## Firebase Services and Security
+
+### Cloud Firestore
+- Document-based NoSQL database
+- Security rules control access to documents and collections
+- Rules can validate data structure and content
+
+### Realtime Database  
+- JSON-based realtime database
+- Security rules use JSON-like syntax
+- Rules control read/write access to database paths
+
+### Cloud Storage
+- File storage service
+- Security rules control file upload/download permissions
+- Can integrate with Firebase Auth for user-based access
+
+### Cloud Functions
+- Serverless functions that run in response to events
+- Admin SDK bypasses security rules
+- Must implement their own authorization logic
+
+## Security Best Practices
+
+### 1. Principle of Least Privilege
+Grant users the minimum access necessary to perform their tasks.
+
+```javascript
+// Good: Specific access control
+match /users/{userId} {
+  allow read, write: if request.auth != null && request.auth.uid == userId;
+}
+
+// Bad: Overly broad access
+match /users/{userId} {
+  allow read, write: if request.auth != null;
+}
+```
+
+### 2. Always Authenticate First
+Check authentication before granting any access to sensitive data.
+
+```javascript
+// Always check authentication for sensitive data
+match /private_data/{document} {
+  allow read, write: if request.auth != null && /* additional checks */;
+}
+```
+
+### 3. Validate Data Structure
+Use security rules to enforce data schema and business rules.
+
+```javascript
+function validateUserData(data) {
+  return data.keys().hasAll(['name', 'email']) &&
+         data.name is string &&
+         data.email.matches('.*@.*\\..*');
+}
+```
+
+### 4. Test Your Rules
+Use Firebase emulators and automated testing to verify security rules work as expected.
+
+```bash
+firebase emulators:start --only firestore
+npm run test-security-rules
+```
+
+## Development Workflow
+
+### 1. Start Secure
+Begin with deny-by-default rules, not test mode.
+
+```javascript
+// Start with this, not test mode
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false; // Deny all access by default
+    }
+  }
+}
+```
+
+### 2. Add Rules Incrementally
+Add specific rules for each use case your application needs.
+
+### 3. Test Thoroughly
+Test both positive and negative cases - ensure authorized users can access data and unauthorized users cannot.
+
+### 4. Monitor in Production
+Set up logging and alerting to detect security rule violations.
+
+## Security Tools and Resources
+
+### Firebase Tools
+- **Firebase Console**: Web interface for managing rules
+- **Firebase CLI**: Command-line tools for deployment and testing
+- **Rules Playground**: Interactive testing environment
+- **Emulator Suite**: Local development and testing
+
+### Documentation
+- [Firebase Security Rules Guide](https://firebase.google.com/docs/rules)
+- [Firestore Security Rules](https://firebase.google.com/docs/firestore/security/get-started)
+- [Realtime Database Rules](https://firebase.google.com/docs/database/security)
+
+### Security Testing
+- Unit testing framework for security rules
+- Integration testing with emulators
+- Production monitoring and alerting
+
+<Warning>
+Remember: Security rules are not filters - they determine permissions. If a rule allows access, the client receives the data. Design rules to prevent unauthorized access entirely.
+</Warning>
+
+## Next Steps
+
+1. Review the [FBR-ACCESS-001 vulnerability](/security/firebase/fbr-access-001) to understand the most critical Firebase security issue
+2. Audit your existing Firebase projects for security vulnerabilities
+3. Implement comprehensive security rules following the principle of least privilege
+4. Set up monitoring and testing for your security rules

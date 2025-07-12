@@ -1,0 +1,46 @@
+---
+title: Security Overview
+description: "Critical security vulnerabilities and best practices for modern web applications"
+---
+
+# Security Documentation
+
+This section covers critical security vulnerabilities and best practices for protecting your applications and data. Each vulnerability is documented with detailed explanations, detection methods, and comprehensive mitigation strategies.
+
+## Firebase Security Vulnerabilities
+
+Firebase and Cloud Firestore security issues can lead to complete data exposure if not properly configured. These vulnerabilities are often introduced during development and testing phases.
+
+<CardGroup cols={1}>
+  <Card
+    title="FBR-ACCESS-001: Universal Public Access"
+    icon="shield-exclamation"
+    href="/security/firebase/fbr-access-001"
+  >
+    Critical vulnerability where Firestore security rules grant unrestricted access to anyone on the internet
+  </Card>
+</CardGroup>
+
+## Why Security Documentation Matters
+
+Modern web applications often integrate with cloud services like Firebase, which provide powerful databases and authentication systems. However, misconfigured security rules can expose sensitive data to unauthorized access.
+
+The vulnerabilities documented here represent real-world security issues that can have severe consequences:
+
+- **Data breaches** affecting user privacy and business operations
+- **Compliance violations** with regulations like GDPR and CCPA  
+- **Financial losses** from data theft and regulatory fines
+- **Reputation damage** from public security incidents
+
+## How to Use This Documentation
+
+Each security vulnerability is documented with:
+
+- **Vulnerability Description**: What the issue is and why it's dangerous
+- **Risk Assessment**: Severity level and potential impact
+- **Detection Methods**: How to identify if you're affected
+- **Mitigation Strategies**: Step-by-step fixes and preventive measures
+- **Code Examples**: Vulnerable configurations vs secure implementations
+- **Best Practices**: Long-term security recommendations
+
+Take time to review these vulnerabilities even if you think you're not affected - many security issues are introduced accidentally during development or deployment processes.

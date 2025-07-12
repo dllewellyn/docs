@@ -53,6 +53,24 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "Security",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "security/introduction"
+            ]
+          },
+          {
+            "group": "Firebase Security",
+            "pages": [
+              "security/firebase/overview",
+              "security/firebase/fbr-access-001"
+            ]
+          }
+        ]
       }
     ],
     "global": {

@@ -1,0 +1,313 @@
+---
+title: "FBR-ACCESS-001: Universal Public Access to Firestore Database"
+description: "Critical vulnerability where Firebase security rules grant unrestricted read and write access to anyone on the internet"
+---
+
+# FBR-ACCESS-001: Universal Public Access to Firestore Database
+
+<Warning>
+**Critical Security Vulnerability** - This configuration allows anyone on the internet to read, modify, or delete all data in your Firestore database without authentication.
+</Warning>
+
+## Overview
+
+**Rule ID**: FBR-ACCESS-001  
+**Severity**: Critical  
+**Affected Services**: Cloud Firestore, Firebase Realtime Database  
+**Common Cause**: Developers enable Firebase Test Mode during development and forget to secure rules before production deployment
+
+## Vulnerability Description
+
+This critical vulnerability occurs when Firebase security rules use permissive conditions like `allow read, write: if true` that grant universal access to the entire database. The rules completely bypass authentication and authorization checks, allowing anyone on the internet to:
+
+- Read all documents and collections
+- Modify or delete existing data
+- Create new documents with arbitrary content
+- Potentially cause service disruption through excessive usage
+
+## How This Vulnerability Occurs
+
+### Firebase Test Mode
+When developers first set up Firebase, they often start with "Test Mode" which automatically generates these insecure rules:
+
+```javascript
+// VULNERABLE: Firebase Test Mode Rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true; // Allows anyone to read/write
+    }
+  }
+}
+```
+
+### Common Development Practices Leading to This Issue
+
+1. **Quick Setup**: Developers choose Test Mode for rapid prototyping
+2. **Forgotten Migration**: Rules are never updated when moving to production
+3. **Copy-Paste Errors**: Insecure rules are copied between projects
+4. **Lack of Awareness**: Teams don't understand the security implications
+
+## Detection Methods
+
+### Check Your Current Rules
+
+You can view your current Firestore security rules in several ways:
+
+**Firebase Console:**
+1. Go to [Firebase Console](https://console.firebase.google.com)
+2. Select your project
+3. Navigate to Firestore Database → Rules
+4. Review the current rules
+
+**Firebase CLI:**
+```bash
+firebase firestore:rules:list
+```
+
+### Automated Security Scanning
+
+Use Firebase's built-in security analyzer:
+
+```bash
+firebase firestore:rules:get > firestore.rules
+firebase emulators:exec --only firestore "npm run security-tests"
+```
+
+### Look for These Dangerous Patterns
+
+<CodeGroup>
+```javascript Universal Access
+// DANGEROUS: Allows anyone to do anything
+allow read, write: if true;
+```
+
+```javascript Unrestricted Write Access  
+// DANGEROUS: Anyone can modify data
+allow write: if true;
+allow read: if request.auth != null;
+```
+
+```javascript Overly Broad Paths
+// DANGEROUS: Applies to all documents
+match /{document=**} {
+  allow read, write: if true;
+}
+```
+</CodeGroup>
+
+## Example Attack Scenarios
+
+### Direct API Access
+An attacker can directly use the Firestore REST API:
+
+```bash
+# Read all documents in a collection
+curl "https://firestore.googleapis.com/v1/projects/YOUR_PROJECT/databases/(default)/documents/users"
+
+# Write arbitrary data
+curl -X POST "https://firestore.googleapis.com/v1/projects/YOUR_PROJECT/databases/(default)/documents/users" \
+  -H "Content-Type: application/json" \
+  -d '{"fields": {"malicious": {"stringValue": "data"}}}'
+```
+
+### SDK-Based Attacks
+Using Firebase SDK to access data programmatically:
+
+```javascript
+// Attacker's code to read all user data
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
+
+const firebaseConfig = {
+  // Your public Firebase config
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// Read all users (no authentication required)
+const usersSnapshot = await getDocs(collection(db, 'users'));
+usersSnapshot.forEach((doc) => {
+  console.log('Stolen data:', doc.data());
+});
+```
+
+## Secure Implementation
+
+### Deny-by-Default Security Rules
+
+Replace universal access with secure, authenticated rules:
+
+<CodeGroup>
+```javascript Secure User Data Access
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can only access their own documents
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Public read-only data (like blog posts)
+    match /posts/{postId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+                      request.auth.uid == resource.data.authorId;
+    }
+    
+    // Admin-only access
+    match /admin/{document=**} {
+      allow read, write: if request.auth != null && 
+                            request.auth.token.admin == true;
+    }
+  }
+}
+```
+
+```javascript Role-Based Access Control
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Function to check user roles
+    function isAuthorized(role) {
+      return request.auth != null && 
+             request.auth.token.role == role;
+    }
+    
+    // Different access levels based on roles
+    match /sensitive_data/{document} {
+      allow read: if isAuthorized('admin') || isAuthorized('manager');
+      allow write: if isAuthorized('admin');
+    }
+    
+    // User can only access their own profile
+    match /user_profiles/{userId} {
+      allow read, write: if request.auth != null && 
+                            request.auth.uid == userId;
+    }
+  }
+}
+```
+
+```javascript Content Validation Rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if request.auth != null &&
+                      validatePost(request.resource.data);
+      allow update: if request.auth != null &&
+                      request.auth.uid == resource.data.authorId &&
+                      validatePost(request.resource.data);
+    }
+    
+    function validatePost(data) {
+      return data.keys().hasAll(['title', 'content', 'authorId']) &&
+             data.title is string &&
+             data.title.size() > 0 &&
+             data.content is string &&
+             data.authorId == request.auth.uid;
+    }
+  }
+}
+```
+</CodeGroup>
+
+## Step-by-Step Mitigation
+
+### 1. Audit Current Rules
+```bash
+# Download current rules for review
+firebase firestore:rules:get > current_rules.txt
+
+# Review the file for dangerous patterns
+grep -n "if true" current_rules.txt
+```
+
+### 2. Create Secure Rules
+Based on your application's needs, implement appropriate security rules using the examples above.
+
+### 3. Test Security Rules
+Use Firebase emulator to test rules before deployment:
+
+```bash
+# Start Firestore emulator
+firebase emulators:start --only firestore
+
+# Run your test suite
+npm test
+
+# Test specific security scenarios
+firebase emulators:exec --only firestore "npm run security-tests"
+```
+
+### 4. Deploy Secure Rules
+```bash
+# Deploy new rules to production
+firebase deploy --only firestore:rules
+
+# Verify deployment
+firebase firestore:rules:list
+```
+
+### 5. Monitor Access Patterns
+Set up monitoring to detect unusual access patterns:
+
+```javascript
+// Cloud Function to monitor Firestore access
+exports.monitorAccess = functions.firestore
+  .document('{collection}/{docId}')
+  .onWrite((change, context) => {
+    // Log access patterns
+    console.log('Access to:', context.params.collection, context.params.docId);
+    
+    // Alert on suspicious activity
+    if (detectSuspiciousPattern(change, context)) {
+      sendSecurityAlert(context);
+    }
+  });
+```
+
+## Prevention Best Practices
+
+### Development Workflow
+1. **Never use Test Mode in production** - Always start with deny-by-default rules
+2. **Code review security rules** - Treat rules as critical security code
+3. **Use staging environments** - Test rule changes before production deployment
+4. **Document access patterns** - Maintain clear documentation of who should access what
+
+### Security Rule Design Principles
+1. **Principle of Least Privilege** - Grant minimum necessary access
+2. **Authentication First** - Always verify `request.auth != null` for sensitive data
+3. **Validate Input Data** - Check data structure and content in rules
+4. **Audit Regularly** - Review rules periodically for unnecessary permissions
+
+### Monitoring and Alerting
+1. **Enable Firebase Security Rules logs** in Cloud Logging
+2. **Set up alerts** for rule violations or unusual access patterns
+3. **Regular security audits** of rules and access logs
+4. **Penetration testing** of Firebase security configurations
+
+## Tools and Resources
+
+### Firebase Security Tools
+- [Firebase Security Rules Playground](https://firebase.google.com/docs/rules/simulator)
+- [Firestore Security Rules Reference](https://firebase.google.com/docs/firestore/security/rules-structure)
+- [Firebase CLI Security Commands](https://firebase.google.com/docs/cli)
+
+### Security Testing
+- [Firebase Emulator Suite](https://firebase.google.com/docs/emulator-suite)
+- [Security Rules Unit Testing](https://firebase.google.com/docs/rules/unit-tests)
+
+## Related Vulnerabilities
+
+- **Authentication Bypass**: Rules that don't properly verify user identity
+- **Authorization Failures**: Rules that grant excessive permissions to authenticated users
+- **Data Validation Issues**: Rules that don't validate input data structure
+
+<Note>
+Remember: Firebase security rules are not filters - they're permissions. If a rule allows access, the client gets the data. Design rules to prevent unauthorized access, not to hide data.
+</Note>
