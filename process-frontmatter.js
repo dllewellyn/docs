@@ -376,14 +376,22 @@ class FrontMatterProcessor {
 async function main() {
   const args = process.argv.slice(2);
   
+  // Check for CSV-only mode - this explicitly disables Firestore sync for security
+  const csvOnlyMode = args.includes('--csv');
+  
   const options = {
-    syncToFirestore: args.includes('--sync-firestore'),
+    syncToFirestore: csvOnlyMode ? false : args.includes('--sync-firestore'),
     saveToFile: !args.includes('--no-json'),
     saveToCsv: !args.includes('--no-csv'),
     outputFile: args.find(arg => arg.startsWith('--output='))?.split('=')[1] || 'frontmatter-data.json',
     csvFile: args.find(arg => arg.startsWith('--csv='))?.split('=')[1] || 'frontmatter-data.csv',
     collectionName: args.find(arg => arg.startsWith('--collection='))?.split('=')[1] || 'markdown_files'
   };
+  
+  // Security check: Warn if trying to sync CSV data to Firestore
+  if (csvOnlyMode && args.includes('--sync-firestore')) {
+    console.log('⚠️  WARNING: CSV mode explicitly disables Firestore sync for security. CSV data will not be uploaded to Firebase.');
+  }
 
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`
@@ -391,6 +399,7 @@ Usage: node process-frontmatter.js [options]
 
 Options:
   --sync-firestore     Sync data to Firestore (requires FIREBASE_SERVICE_ACCOUNT_KEY)
+  --csv               CSV-only mode: generate CSV and disable Firestore sync for security
   --no-json           Don't save data to JSON file
   --no-csv            Don't save data to CSV file
   --output=FILE       Output JSON file name (default: frontmatter-data.json)
@@ -404,6 +413,7 @@ Environment Variables:
 Examples:
   node process-frontmatter.js                    # Parse and save to JSON + CSV
   node process-frontmatter.js --sync-firestore   # Parse and sync to Firestore
+  node process-frontmatter.js --csv              # CSV-only mode (no Firestore sync)
   node process-frontmatter.js --csv=data.csv     # Save CSV to custom file
   node process-frontmatter.js --no-json          # Only generate CSV, skip JSON
 `);
