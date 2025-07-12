@@ -1,17 +1,15 @@
 {
-  "name": "docs-frontmatter-firestore",
+  "name": "docs-frontmatter-processor",
   "version": "1.0.0",
-  "description": "Script to process markdown files with front matter and sync to Firestore",
+  "description": "Script to process markdown files with front matter and export to CSV/JSON",
   "main": "process-frontmatter.js",
   "scripts": {
     "process-frontmatter": "node process-frontmatter.js",
-    "process-frontmatter:firestore": "node process-frontmatter.js --sync-firestore",
-    "process-frontmatter:csv": "node process-frontmatter.js --csv --no-json",
+    "process-frontmatter:csv": "node process-frontmatter.js --no-json",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
     "gray-matter": "^4.0.3",
-    "firebase-admin": "^11.11.1",
     "glob": "^10.3.10"
   },
   "devDependencies": {
@@ -20,7 +18,7 @@
   "keywords": [
     "markdown",
     "frontmatter",
-    "firestore",
+    "csv",
     "documentation"
   ],
   "author": "",

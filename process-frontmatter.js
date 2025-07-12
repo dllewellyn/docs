@@ -4,59 +4,20 @@ const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
 const { glob } = require('glob');
-const admin = require('firebase-admin');
 
 /**
- * Script to process markdown files with front matter and sync to Firestore
+ * Script to process markdown files with front matter and export to CSV/JSON
  * 
  * This script:
  * 1. Scans for all .md and .mdx files in the repository
  * 2. Extracts front matter from each file
- * 3. Prepares data for Firestore storage
- * 4. Optionally syncs the data to Firestore
+ * 3. Exports data to CSV and/or JSON formats
  */
 
 class FrontMatterProcessor {
   constructor() {
     this.markdownFiles = [];
     this.frontMatterData = [];
-    this.firebaseApp = null;
-    this.db = null;
-  }
-
-  /**
-   * Initialize Firebase Admin SDK
-   * Requires FIREBASE_SERVICE_ACCOUNT_KEY environment variable or service account file
-   */
-  async initializeFirebase() {
-    try {
-      // Check if Firebase is already initialized
-      if (this.firebaseApp) {
-        return;
-      }
-
-      // Try to get service account from environment variable
-      const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-      
-      if (serviceAccountKey) {
-        const serviceAccount = JSON.parse(serviceAccountKey);
-        this.firebaseApp = admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount)
-        });
-      } else {
-        // Try to use default credentials or service account file
-        console.log('No FIREBASE_SERVICE_ACCOUNT_KEY found. Trying default credentials...');
-        console.log('Please set FIREBASE_SERVICE_ACCOUNT_KEY environment variable or ensure default credentials are available.');
-        return false;
-      }
-
-      this.db = admin.firestore();
-      console.log('✓ Firebase initialized successfully');
-      return true;
-    } catch (error) {
-      console.error('✗ Failed to initialize Firebase:', error.message);
-      return false;
-    }
   }
 
   /**
@@ -183,66 +144,6 @@ class FrontMatterProcessor {
   }
 
   /**
-   * Sync data to Firestore
-   */
-  async syncToFirestore(collectionName = 'markdown_files') {
-    if (!this.db) {
-      console.log('⚠️  Firestore not initialized. Skipping sync.');
-      return false;
-    }
-
-    try {
-      console.log(`\nSyncing data to Firestore collection: ${collectionName}`);
-      
-      const batch = this.db.batch();
-      let batchCount = 0;
-      const maxBatchSize = 500; // Firestore batch limit
-
-      for (const fileData of this.frontMatterData) {
-        // Create document ID from file path (sanitized)
-        const docId = fileData.filePath.replace(/[\/\\.]/g, '_');
-        
-        const docRef = this.db.collection(collectionName).doc(docId);
-        
-        // Prepare data for Firestore (remove functions and add timestamps)
-        const firestoreData = {
-          filePath: fileData.filePath,
-          fileName: fileData.fileName,
-          directory: fileData.directory,
-          frontMatter: fileData.frontMatter,
-          isEmpty: fileData.isEmpty,
-          hasContent: fileData.hasContent,
-          lastModified: admin.firestore.Timestamp.fromDate(fileData.lastModified),
-          size: fileData.size,
-          syncedAt: admin.firestore.FieldValue.serverTimestamp()
-        };
-
-        batch.set(docRef, firestoreData);
-        batchCount++;
-
-        // Commit batch if it reaches the limit
-        if (batchCount >= maxBatchSize) {
-          await batch.commit();
-          console.log(`✓ Committed batch of ${batchCount} documents`);
-          batchCount = 0;
-        }
-      }
-
-      // Commit remaining documents
-      if (batchCount > 0) {
-        await batch.commit();
-        console.log(`✓ Committed final batch of ${batchCount} documents`);
-      }
-
-      console.log(`✓ Successfully synced ${this.frontMatterData.length} files to Firestore`);
-      return true;
-    } catch (error) {
-      console.error('✗ Error syncing to Firestore:', error.message);
-      return false;
-    }
-  }
-
-  /**
    * Save data to JSON file for backup/review
    */
   async saveToFile(outputPath = 'frontmatter-data.json') {
@@ -325,12 +226,10 @@ class FrontMatterProcessor {
    */
   async process(options = {}) {
     const {
-      syncToFirestore = false,
       saveToFile = true,
       saveToCsv = true,
       outputFile = 'frontmatter-data.json',
-      csvFile = 'frontmatter-data.csv',
-      collectionName = 'markdown_files'
+      csvFile = 'frontmatter-data.csv'
     } = options;
 
     try {
@@ -355,14 +254,6 @@ class FrontMatterProcessor {
         await this.saveToCsv(csvFile);
       }
 
-      // Sync to Firestore if requested and possible
-      if (syncToFirestore) {
-        const firebaseInitialized = await this.initializeFirebase();
-        if (firebaseInitialized) {
-          await this.syncToFirestore(collectionName);
-        }
-      }
-
       console.log('\n✅ Processing completed successfully!');
       return summary;
     } catch (error) {
@@ -376,44 +267,26 @@ class FrontMatterProcessor {
 async function main() {
   const args = process.argv.slice(2);
   
-  // Check for CSV-only mode - this explicitly disables Firestore sync for security
-  const csvOnlyMode = args.includes('--csv');
-  
   const options = {
-    syncToFirestore: csvOnlyMode ? false : args.includes('--sync-firestore'),
     saveToFile: !args.includes('--no-json'),
     saveToCsv: !args.includes('--no-csv'),
     outputFile: args.find(arg => arg.startsWith('--output='))?.split('=')[1] || 'frontmatter-data.json',
-    csvFile: args.find(arg => arg.startsWith('--csv='))?.split('=')[1] || 'frontmatter-data.csv',
-    collectionName: args.find(arg => arg.startsWith('--collection='))?.split('=')[1] || 'markdown_files'
+    csvFile: args.find(arg => arg.startsWith('--csv='))?.split('=')[1] || 'frontmatter-data.csv'
   };
-  
-  // Security check: Warn if trying to sync CSV data to Firestore
-  if (csvOnlyMode && args.includes('--sync-firestore')) {
-    console.log('⚠️  WARNING: CSV mode explicitly disables Firestore sync for security. CSV data will not be uploaded to Firebase.');
-  }
 
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`
 Usage: node process-frontmatter.js [options]
 
 Options:
-  --sync-firestore     Sync data to Firestore (requires FIREBASE_SERVICE_ACCOUNT_KEY)
-  --csv               CSV-only mode: generate CSV and disable Firestore sync for security
   --no-json           Don't save data to JSON file
   --no-csv            Don't save data to CSV file
   --output=FILE       Output JSON file name (default: frontmatter-data.json)
   --csv=FILE          Output CSV file name (default: frontmatter-data.csv)
-  --collection=NAME   Firestore collection name (default: markdown_files)
   --help, -h          Show this help message
-
-Environment Variables:
-  FIREBASE_SERVICE_ACCOUNT_KEY  JSON string of Firebase service account key
 
 Examples:
   node process-frontmatter.js                    # Parse and save to JSON + CSV
-  node process-frontmatter.js --sync-firestore   # Parse and sync to Firestore
-  node process-frontmatter.js --csv              # CSV-only mode (no Firestore sync)
   node process-frontmatter.js --csv=data.csv     # Save CSV to custom file
   node process-frontmatter.js --no-json          # Only generate CSV, skip JSON
 `);

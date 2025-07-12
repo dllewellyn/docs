@@ -1,6 +1,6 @@
-# Front Matter to Firestore/CSV Processor
+# Front Matter to CSV/JSON Processor
 
-This script processes all markdown (.md and .mdx) files in the repository, extracts their YAML front matter headers, and provides multiple export options including CSV and Firestore database sync.
+This script processes all markdown (.md and .mdx) files in the repository, extracts their YAML front matter headers, and exports the data to CSV and JSON formats for analysis.
 
 ## Features
 
@@ -8,7 +8,6 @@ This script processes all markdown (.md and .mdx) files in the repository, extra
 - **Front Matter Parsing**: Extracts YAML front matter from each file using gray-matter
 - **File Metadata**: Captures file path, size, modification date, and content structure
 - **Multiple Export Formats**: JSON and CSV export options
-- **Firestore Integration**: Optional sync to Firebase Firestore database
 - **GitHub Actions Integration**: Automated CSV generation with downloadable artifacts
 - **Detailed Reporting**: Shows summary of files processed and front matter fields found
 
@@ -32,22 +31,11 @@ npm run process-frontmatter:csv
 node process-frontmatter.js --no-json
 ```
 
-### Sync to Firestore
-```bash
-# Set your Firebase service account key
-export FIREBASE_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'
-
-# Run with Firestore sync
-node process-frontmatter.js --sync-firestore
-```
-
 ### Custom Options
 ```bash
 # Custom output files
 node process-frontmatter.js --output=my-data.json --csv=my-data.csv
-
-# Custom Firestore collection
-node process-frontmatter.js --sync-firestore --collection=docs_metadata
+```
 
 # Skip JSON or CSV generation
 node process-frontmatter.js --no-json          # Only CSV
@@ -58,31 +46,14 @@ node process-frontmatter.js --no-csv           # Only JSON
 
 - `npm run process-frontmatter`: Generate both JSON and CSV files
 - `npm run process-frontmatter:csv`: Generate CSV file only
-- `npm run process-frontmatter:firestore`: Generate files and sync to Firestore
 
 ## Command Line Options
 
-- `--sync-firestore`: Enable syncing to Firestore (requires FIREBASE_SERVICE_ACCOUNT_KEY)
 - `--no-json`: Skip saving data to JSON file
 - `--no-csv`: Skip saving data to CSV file
 - `--output=FILE`: Specify custom output JSON file name (default: frontmatter-data.json)
 - `--csv=FILE`: Specify custom output CSV file name (default: frontmatter-data.csv)
-- `--collection=NAME`: Specify Firestore collection name (default: markdown_files)
 - `--help`, `-h`: Show help message
-
-## Environment Variables
-
-- `FIREBASE_SERVICE_ACCOUNT_KEY`: JSON string containing Firebase service account credentials
-
-## Firestore Setup
-
-1. Create a Firebase project at https://console.firebase.google.com
-2. Enable Firestore database
-3. Create a service account:
-   - Go to Project Settings > Service Accounts
-   - Generate new private key
-   - Download the JSON file
-4. Set the JSON content as the `FIREBASE_SERVICE_ACCOUNT_KEY` environment variable
 
 ## GitHub Actions Integration
 
@@ -147,20 +118,6 @@ This format is perfect for:
 - Database imports
 - Content auditing and reporting
 
-## Firestore Document Structure
-
-When syncing to Firestore, each document contains:
-
-- `filePath`: Relative path to the file
-- `fileName`: Name of the file
-- `directory`: Directory containing the file
-- `frontMatter`: Object containing all front matter fields
-- `isEmpty`: Whether the front matter is empty
-- `hasContent`: Whether the file has content beyond front matter
-- `lastModified`: File modification timestamp
-- `size`: File size in bytes
-- `syncedAt`: Server timestamp when synced to Firestore
-
 ## Programmatic Usage
 
 ```javascript
@@ -170,10 +127,10 @@ const processor = new FrontMatterProcessor();
 
 // Process files and get summary
 const summary = await processor.process({
-  syncToFirestore: true,
   saveToFile: true,
+  saveToCsv: true,
   outputFile: 'custom-output.json',
-  collectionName: 'my_docs'
+  csvFile: 'custom-data.csv'
 });
 
 console.log(summary);
@@ -184,12 +141,10 @@ console.log(summary);
 The script includes comprehensive error handling:
 
 - Individual file processing errors don't stop the entire process
-- Firestore connection issues are handled gracefully
 - Clear error messages and logging throughout the process
 
 ## Dependencies
 
 - `gray-matter`: YAML front matter parsing
-- `firebase-admin`: Firestore integration
 - `glob`: File system pattern matching
 - `dotenv`: Environment variable loading (dev dependency)
