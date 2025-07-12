@@ -263,13 +263,73 @@ class FrontMatterProcessor {
   }
 
   /**
+   * Save data to CSV file for easy analysis
+   */
+  async saveToCsv(outputPath = 'frontmatter-data.csv') {
+    try {
+      console.log('Generating CSV export...');
+      
+      // Get all unique front matter keys across all files
+      const allKeys = new Set(['filePath', 'fileName', 'directory', 'lastModified', 'size']);
+      this.frontMatterData.forEach(file => {
+        Object.keys(file.frontMatter).forEach(key => allKeys.add(key));
+      });
+
+      const headers = Array.from(allKeys);
+      
+      // Create CSV content
+      let csvContent = headers.map(header => `"${header}"`).join(',') + '\n';
+      
+      // Add data rows
+      for (const file of this.frontMatterData) {
+        const row = headers.map(header => {
+          let value = '';
+          
+          if (header === 'filePath') {
+            value = file.filePath;
+          } else if (header === 'fileName') {
+            value = file.fileName;
+          } else if (header === 'directory') {
+            value = file.directory;
+          } else if (header === 'lastModified') {
+            value = file.lastModified.toISOString();
+          } else if (header === 'size') {
+            value = file.size.toString();
+          } else if (file.frontMatter[header] !== undefined) {
+            value = file.frontMatter[header];
+            // Handle complex values by converting to string
+            if (typeof value === 'object') {
+              value = JSON.stringify(value);
+            }
+          }
+          
+          // Escape quotes and wrap in quotes for CSV
+          return `"${String(value).replace(/"/g, '""')}"`;
+        }).join(',');
+        
+        csvContent += row + '\n';
+      }
+
+      fs.writeFileSync(outputPath, csvContent);
+      console.log(`✓ CSV data saved to ${outputPath}`);
+      console.log(`✓ CSV contains ${this.frontMatterData.length} rows and ${headers.length} columns`);
+      return true;
+    } catch (error) {
+      console.error('✗ Error saving to CSV:', error.message);
+      return false;
+    }
+  }
+
+  /**
    * Main processing function
    */
   async process(options = {}) {
     const {
       syncToFirestore = false,
       saveToFile = true,
+      saveToCsv = true,
       outputFile = 'frontmatter-data.json',
+      csvFile = 'frontmatter-data.csv',
       collectionName = 'markdown_files'
     } = options;
 
@@ -285,9 +345,14 @@ class FrontMatterProcessor {
       // Generate summary
       const summary = this.generateSummary();
 
-      // Save to file if requested
+      // Save to JSON file if requested
       if (saveToFile) {
         await this.saveToFile(outputFile);
+      }
+
+      // Save to CSV file if requested
+      if (saveToCsv) {
+        await this.saveToCsv(csvFile);
       }
 
       // Sync to Firestore if requested and possible
@@ -313,8 +378,10 @@ async function main() {
   
   const options = {
     syncToFirestore: args.includes('--sync-firestore'),
-    saveToFile: !args.includes('--no-save'),
+    saveToFile: !args.includes('--no-json'),
+    saveToCsv: !args.includes('--no-csv'),
     outputFile: args.find(arg => arg.startsWith('--output='))?.split('=')[1] || 'frontmatter-data.json',
+    csvFile: args.find(arg => arg.startsWith('--csv='))?.split('=')[1] || 'frontmatter-data.csv',
     collectionName: args.find(arg => arg.startsWith('--collection='))?.split('=')[1] || 'markdown_files'
   };
 
@@ -324,8 +391,10 @@ Usage: node process-frontmatter.js [options]
 
 Options:
   --sync-firestore     Sync data to Firestore (requires FIREBASE_SERVICE_ACCOUNT_KEY)
-  --no-save           Don't save data to JSON file
+  --no-json           Don't save data to JSON file
+  --no-csv            Don't save data to CSV file
   --output=FILE       Output JSON file name (default: frontmatter-data.json)
+  --csv=FILE          Output CSV file name (default: frontmatter-data.csv)
   --collection=NAME   Firestore collection name (default: markdown_files)
   --help, -h          Show this help message
 
@@ -333,9 +402,10 @@ Environment Variables:
   FIREBASE_SERVICE_ACCOUNT_KEY  JSON string of Firebase service account key
 
 Examples:
-  node process-frontmatter.js                    # Parse and save to JSON only
+  node process-frontmatter.js                    # Parse and save to JSON + CSV
   node process-frontmatter.js --sync-firestore   # Parse and sync to Firestore
-  node process-frontmatter.js --output=data.json # Save to custom file
+  node process-frontmatter.js --csv=data.csv     # Save CSV to custom file
+  node process-frontmatter.js --no-json          # Only generate CSV, skip JSON
 `);
     process.exit(0);
   }

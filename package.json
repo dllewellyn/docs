@@ -6,6 +6,7 @@
   "scripts": {
     "process-frontmatter": "node process-frontmatter.js",
     "process-frontmatter:firestore": "node process-frontmatter.js --sync-firestore",
+    "process-frontmatter:csv": "node process-frontmatter.js --no-json",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
