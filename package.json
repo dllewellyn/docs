@@ -1,0 +1,27 @@
+{
+  "name": "docs-frontmatter-firestore",
+  "version": "1.0.0",
+  "description": "Script to process markdown files with front matter and sync to Firestore",
+  "main": "process-frontmatter.js",
+  "scripts": {
+    "process-frontmatter": "node process-frontmatter.js",
+    "process-frontmatter:firestore": "node process-frontmatter.js --sync-firestore",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "firebase-admin": "^11.11.1",
+    "glob": "^10.3.10"
+  },
+  "devDependencies": {
+    "dotenv": "^16.3.1"
+  },
+  "keywords": [
+    "markdown",
+    "frontmatter",
+    "firestore",
+    "documentation"
+  ],
+  "author": "",
+  "license": "ISC"
+}
